@@ -1,0 +1,11 @@
+# Install with install.sh — cadquery needs special handling on aarch64 (see README).
+fastapi
+uvicorn[standard]
+python-multipart
+numpy
+trimesh
+manifold3d
+requests
+# cadquery 2.8.0 installed with --no-deps + manual deps; nlopt satisfied by nlopt_shim/
+networkx
+scikit-image

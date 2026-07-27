@@ -1,0 +1,10 @@
+.venv/
+__pycache__/
+output/
+data/dim_cache.json
+*.pyc
+hq_refs/
+*.bak*
+.env
+.env.*
+.claude/

@@ -1,0 +1,814 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>STL Sandbox</title>
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{
+  --bg:#0a0a0f; --panel:#111118; --line:#1e1e2a; --line2:#2a2a3a;
+  --txt:#e0e0e0; --dim:#888; --accent:#6c9cff; --accent2:#8b5cf6;
+  --ok:#4ade80; --warn:#fbbf24; --err:#ff6b6b; --mono:'SF Mono','Cascadia Code','Courier New',monospace;
+}
+body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;background:var(--bg);color:var(--txt);height:100vh;overflow:hidden}
+.wrap{display:grid;grid-template-columns:380px 1fr;height:100vh}
+
+/* ── Sidebar ── */
+.side{background:var(--panel);border-right:1px solid var(--line);display:flex;flex-direction:column;overflow-y:auto}
+.side::-webkit-scrollbar{width:8px}.side::-webkit-scrollbar-thumb{background:var(--line2);border-radius:4px}
+.head{padding:16px 18px 12px;border-bottom:1px solid var(--line);display:flex;align-items:center;justify-content:space-between}
+h1{font-size:17px;font-weight:700}h1 span{color:var(--accent)}
+.llm-badge{display:flex;align-items:center;gap:6px;font-size:11px;color:var(--dim)}
+.dot{width:8px;height:8px;border-radius:50%;background:var(--err);transition:background .3s}
+.dot.up{background:var(--ok)}
+.sec{padding:14px 18px;border-bottom:1px solid var(--line)}
+.lbl{font-size:10px;text-transform:uppercase;letter-spacing:.8px;color:var(--dim);margin-bottom:8px;display:flex;justify-content:space-between;align-items:center}
+textarea#prompt{width:100%;min-height:76px;padding:11px;background:var(--bg);border:1px solid var(--line2);border-radius:8px;color:var(--txt);font-size:13px;line-height:1.45;resize:vertical;font-family:inherit}
+textarea#prompt:focus{outline:none;border-color:var(--accent)}
+.row{display:flex;gap:8px;margin-top:10px}
+select{background:var(--bg);border:1px solid var(--line2);border-radius:7px;color:var(--txt);font-size:12px;padding:0 8px}
+button{cursor:pointer;border:none;border-radius:7px;font-size:13px;font-weight:600;transition:all .15s}
+#go{flex:1;padding:11px;background:var(--accent);color:#fff}
+#go:hover{background:#5a87e8}#go:disabled{background:#3c4a6b;cursor:wait}
+.chips{display:flex;flex-wrap:wrap;gap:6px}
+.chip{padding:5px 10px;background:var(--bg);border:1px solid var(--line2);border-radius:14px;color:#aaa;font-size:11px;cursor:pointer}
+.chip:hover{border-color:var(--accent);color:var(--txt)}
+
+/* progress + result */
+#live{display:none}
+.prog{display:flex;align-items:center;gap:10px;padding:10px;background:var(--bg);border-radius:8px;border:1px solid var(--line2);font-size:12px}
+.spin{width:18px;height:18px;border:2.5px solid var(--line2);border-top-color:var(--accent);border-radius:50%;animation:sp .7s linear infinite;flex-shrink:0}
+@keyframes sp{to{transform:rotate(360deg)}}
+#ptext{color:var(--txt)}#ptime{margin-left:auto;color:var(--dim);font-family:var(--mono);font-size:11px}
+#result{display:none}
+.rescard{background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:12px;font-size:12px}
+.rescard.ok{border-color:#1e5a34}.rescard.err{border-color:#5a1e1e}
+.rtitle{font-weight:700;font-size:13px;margin-bottom:8px;display:flex;align-items:center;gap:8px}
+.badge{font-size:10px;padding:2px 8px;border-radius:10px;font-weight:600}
+.badge.ok{background:#0a2a15;color:var(--ok)}.badge.err{background:#2a0a0a;color:var(--err)}
+.badge.path{background:#151528;color:var(--accent)}
+.stats{display:grid;grid-template-columns:1fr 1fr;gap:6px;margin:8px 0}
+.st{background:var(--panel);border-radius:6px;padding:7px 9px}
+.st b{display:block;font-size:12px;font-weight:600}.st i{font-style:normal;font-size:10px;color:var(--dim)}
+.warn{color:var(--warn);font-size:11px;margin-top:6px;line-height:1.4}
+.errbox{color:var(--err);font-family:var(--mono);font-size:11px;white-space:pre-wrap;max-height:140px;overflow-y:auto;margin-top:6px;line-height:1.4}
+.dl{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:10px}
+.dl a{display:block;text-align:center;padding:9px;border-radius:7px;font-size:12px;font-weight:600;text-decoration:none;border:1px solid #2a8a3a;color:#5cf6b0;background:var(--bg)}
+.dl a:hover{background:#0a2a15}
+.dl a.step{border-color:var(--line2);color:var(--accent)}
+.dl a.step:hover{background:#151528}
+
+/* code panel */
+details.code{margin-top:10px}
+details.code summary{cursor:pointer;font-size:11px;color:var(--dim);user-select:none;padding:4px 0}
+details.code summary:hover{color:var(--txt)}
+#codebox{width:100%;min-height:180px;background:#0d0d14;border:1px solid var(--line2);border-radius:8px;color:#c8d3f5;font-family:var(--mono);font-size:11px;line-height:1.5;padding:10px;resize:vertical;white-space:pre;overflow-x:auto}
+#codebox:focus{outline:none;border-color:var(--accent2)}
+#runcode{width:100%;margin-top:8px;padding:9px;background:var(--accent2);color:#fff}
+#runcode:hover{background:#7a4ce0}#runcode:disabled{background:#4a3a6b;cursor:wait}
+.tries{font-size:10px;color:var(--dim);margin-top:6px;font-family:var(--mono)}
+
+/* library */
+.lib-item{padding:9px 11px;background:var(--bg);border-radius:7px;margin-bottom:6px;cursor:pointer;border:1px solid transparent;display:flex;align-items:center;gap:8px}
+.lib-item:hover{border-color:var(--accent)}
+.lib-item.active{border-color:var(--accent);background:#12121f}
+.lib-info{flex:1;min-width:0}
+.lib-name{font-size:12px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lib-meta{font-size:10px;color:var(--dim);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;margin-top:1px}
+.lib-del{background:none;color:#555;font-size:14px;padding:4px 6px;border-radius:5px;flex-shrink:0}
+.lib-del:hover{color:var(--err);background:#1a0d0d}
+#upl{font-size:11px;color:var(--accent);cursor:pointer;background:none;font-weight:400}
+#upl:hover{text-decoration:underline}
+.empty{color:#555;font-size:11px;text-align:center;padding:12px}
+
+/* ── Viewport ── */
+.vp{position:relative;background:#0d0d13;overflow:hidden}
+#c3d{width:100%;height:100%;display:block;outline:none}
+.hud{position:absolute;bottom:14px;left:14px;font-size:11.5px;color:#999;background:rgba(8,8,12,.7);backdrop-filter:blur(4px);padding:8px 12px;border-radius:7px;border:1px solid var(--line);font-family:var(--mono)}
+.hud b{color:var(--txt)}
+.vp-tools{position:absolute;top:12px;right:12px;display:flex;gap:6px}
+.vt{padding:7px 11px;background:rgba(17,17,24,.85);border:1px solid var(--line2);color:#aaa;font-size:11px;border-radius:7px}
+.vt:hover{color:var(--txt);border-color:var(--accent)}
+.vt.on{color:var(--accent);border-color:var(--accent)}
+.dropzone{position:absolute;inset:0;display:none;align-items:center;justify-content:center;background:rgba(10,10,15,.85);z-index:20;border:2px dashed var(--accent);font-size:16px;color:var(--accent);pointer-events:none}
+
+/* Print Assistant */
+.pa-grid{display:grid;grid-template-columns:1fr 1fr;gap:6px}
+.pa-grid label{display:flex;flex-direction:column;gap:3px;font-size:10px;color:var(--dim)}
+.pa-grid label.full{grid-column:1/-1}
+.pa-grid select,.pa-grid input{background:var(--bg);border:1px solid var(--line2);border-radius:6px;color:var(--txt);font-size:12px;padding:6px 8px}
+.pa-grid select:focus,.pa-grid input:focus{outline:none;border-color:var(--accent)}
+#analyze{width:100%;margin-top:10px;padding:10px;background:linear-gradient(135deg,#3d6fd4,#6b4fcf);color:#fff}
+#analyze:hover{filter:brightness(1.08)}#analyze:disabled{opacity:.5;cursor:wait}
+.fit-row{display:flex;gap:6px;flex-wrap:wrap;margin:8px 0}
+.pill{font-size:10px;font-weight:700;padding:3px 9px;border-radius:999px;letter-spacing:.3px}
+.pill.yes{background:#0a2a15;color:var(--ok)}.pill.maybe{background:#2a220a;color:var(--warn)}.pill.no,.pill.unknown{background:#2a0a0a;color:var(--err)}
+.pill.risk-low{background:#0a2a15;color:var(--ok)}.pill.risk-medium{background:#2a220a;color:var(--warn)}.pill.risk-high{background:#2a0a0a;color:var(--err)}
+#pareport{display:none;margin-top:10px}
+.pareport{background:var(--bg);border:1px solid var(--line2);border-radius:8px;padding:12px;font-size:11.5px;line-height:1.45;max-height:420px;overflow-y:auto}
+.pareport h3{font-size:12px;margin:12px 0 6px;color:var(--accent);text-transform:uppercase;letter-spacing:.5px}
+.pareport h3:first-child{margin-top:0}
+.pareport .sum{font-size:12.5px;font-weight:600;color:var(--txt);margin-bottom:8px}
+.pareport pre{font-family:var(--mono);font-size:10.5px;color:#a8b0c8;white-space:pre-wrap;background:#0d0d14;padding:8px;border-radius:6px;margin:6px 0;border:1px solid var(--line)}
+.pareport ul{margin:4px 0 4px 16px;padding:0}.pareport li{margin:3px 0;color:#c8c8d0}
+.pareport .stage{border-left:2px solid var(--line2);padding:6px 0 6px 10px;margin:6px 0}
+.pareport .stage .t{font-family:var(--mono);color:var(--accent);font-size:11px;font-weight:700}
+.pareport .stage .sn{font-weight:600;color:var(--txt)}
+.pareport .kv{display:grid;grid-template-columns:120px 1fr;gap:2px 8px;font-size:11px}
+.pareport .kv span:first-child{color:var(--dim)}
+.bed-warn{font-size:11px;color:var(--err);margin-top:6px;display:none}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <aside class="side">
+    <div class="head">
+      <h1>STL <span>Sandbox</span></h1>
+      <div class="llm-badge"><div class="dot" id="dot"></div><span id="modelname">checking…</span></div>
+    </div>
+
+    <div class="sec">
+      <span class="lbl">Describe anything
+        <select id="mode" title="auto routes: primitives → imagine (creatures) → mechanical CAD">
+          <option value="auto">auto</option>
+          <option value="imagine_hq">imagine HQ (Flux→Hunyuan3D)</option>
+          <option value="imagine">imagine toy (fast sculpt)</option>
+          <option value="llm">mechanical CAD</option>
+          <option value="fast">primitives only</option>
+        </select>
+      </span>
+      <textarea id="prompt" placeholder="e.g. a cute cat figurine · a chicken · a human figure · or a phone stand…"></textarea>
+      <div class="row"><button id="go">⚡ Generate</button></div>
+      <div class="lbl" style="margin-top:12px">Imagine</div>
+      <div class="chips" id="chips"></div>
+      <div class="lbl" style="margin-top:10px">Mechanical</div>
+      <div class="chips" id="chips_mech"></div>
+    </div>
+
+    <div class="sec" id="live">
+      <div class="prog"><div class="spin"></div><span id="ptext">starting…</span><span id="ptime">0s</span></div>
+    </div>
+
+    <div class="sec" id="result">
+      <div class="rescard" id="rescard">
+        <div class="rtitle"><span id="rname"></span><span class="badge" id="rbadge"></span><span class="badge path" id="rpath"></span></div>
+        <div class="stats" id="rstats"></div>
+        <div id="rwarn"></div>
+        <div class="errbox" id="rerr" style="display:none"></div>
+        <div class="dl" id="rdl"></div>
+        <div id="iso_box" style="display:none;margin-top:10px"></div>
+        <details class="code" id="codewrap">
+          <summary>⟨/⟩ CadQuery code — view, edit &amp; re-run</summary>
+          <textarea id="codebox" spellcheck="false"></textarea>
+          <button id="runcode">▶ Run edited code</button>
+          <div class="tries" id="rtries"></div>
+        </details>
+      </div>
+    </div>
+
+    <div class="sec" id="pasec">
+      <span class="lbl">Print Assistant</span>
+      <div class="pa-grid">
+        <label class="full">Printer
+          <select id="pa_printer"></select>
+        </label>
+        <label>Bed X mm<input id="pa_bed_x" type="number" min="1" step="1" placeholder="required"></label>
+        <label>Bed Y mm<input id="pa_bed_y" type="number" min="1" step="1" placeholder="required"></label>
+        <label>Max Z mm<input id="pa_bed_z" type="number" min="1" step="1" placeholder="required"></label>
+        <label>Nozzle mm<input id="pa_nozzle" type="number" min="0.1" step="0.05" value="0.4"></label>
+        <label>Layer mm<input id="pa_layer" type="number" min="0.05" step="0.05" value="0.2"></label>
+        <label>Filament
+          <select id="pa_filament"><option>PLA</option></select>
+        </label>
+        <label>Use
+          <select id="pa_use">
+            <option value="prototype">prototype</option>
+            <option value="display">display</option>
+            <option value="functional">functional</option>
+            <option value="tool">tool</option>
+            <option value="toy">toy</option>
+            <option value="mechanical">mechanical</option>
+          </select>
+        </label>
+        <label>Demo speed
+          <select id="pa_demo">
+            <option value="2">2x detailed</option>
+            <option value="10" selected>10x normal</option>
+            <option value="60">60x fast</option>
+          </select>
+        </label>
+        <label>Slicer<input id="pa_slicer" type="text" value="standard"></label>
+      </div>
+      <div class="bed-warn" id="bedwarn">⚠ Bed size is required — set X/Y/Z or pick a known printer</div>
+      <button id="analyze">🖨 Analyze print · bed fit · demo</button>
+      <div id="pareport"></div>
+    </div>
+
+    <div class="sec" style="flex:1">
+      <span class="lbl">Library <button id="upl">+ upload STL</button></span>
+      <input type="file" id="uplfile" accept=".stl" style="display:none">
+      <div id="lib"><div class="empty">nothing yet — generate something!</div></div>
+    </div>
+  </aside>
+
+  <main class="vp" id="vp">
+    <canvas id="c3d"></canvas>
+    <div class="vp-tools">
+      <button class="vt" id="tgrid" title="toggle build plate">grid</button>
+      <button class="vt" id="twire" title="toggle wireframe">wire</button>
+      <button class="vt" id="tfit" title="re-fit camera">fit</button>
+    </div>
+    <div class="hud" id="hud">drop an STL here, or type a prompt →</div>
+    <div class="dropzone" id="dz">drop STL to view</div>
+  </main>
+</div>
+
+<script type="importmap">
+{"imports":{"three":"/www/vendor/three.module.js","three/addons/":"/www/vendor/addons/"}}
+</script>
+<script type="module">
+import * as THREE from 'three';
+import {OrbitControls} from 'three/addons/controls/OrbitControls.js';
+import {STLLoader} from 'three/addons/loaders/STLLoader.js';
+
+/* ── 3D scene ── */
+const canvas = document.getElementById('c3d');
+const renderer = new THREE.WebGLRenderer({canvas, antialias:true});
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0d0d13);
+const camera = new THREE.PerspectiveCamera(45, 1, 0.1, 5000);
+camera.position.set(120, 90, 120);
+const controls = new OrbitControls(camera, canvas);
+controls.enableDamping = true;
+
+scene.add(new THREE.HemisphereLight(0xb8c4ff, 0x202028, 1.1));
+const key = new THREE.DirectionalLight(0xffffff, 1.6); key.position.set(80, 140, 60); scene.add(key);
+const fill = new THREE.DirectionalLight(0x88aaff, 0.5); fill.position.set(-90, 40, -70); scene.add(fill);
+
+const grid = new THREE.Group();
+let bedOutline = null;
+function setBedGrid(bx=220, by=220){
+  while(grid.children.length) grid.remove(grid.children[0]);
+  const size = Math.max(bx, by);
+  const divs = Math.max(10, Math.round(size / 10));
+  const g1 = new THREE.GridHelper(size, divs, 0x2a2a3a, 0x1a1a24);
+  grid.add(g1);
+  // bed footprint rectangle (XZ plane in three.js after Y-up: grid is XZ)
+  if(bedOutline){ scene.remove(bedOutline); bedOutline.geometry.dispose(); bedOutline.material.dispose(); }
+  const hw = bx/2, hd = by/2;
+  const pts = [
+    new THREE.Vector3(-hw, 0.05, -hd), new THREE.Vector3(hw, 0.05, -hd),
+    new THREE.Vector3(hw, 0.05, hd), new THREE.Vector3(-hw, 0.05, hd),
+    new THREE.Vector3(-hw, 0.05, -hd),
+  ];
+  bedOutline = new THREE.Line(
+    new THREE.BufferGeometry().setFromPoints(pts),
+    new THREE.LineBasicMaterial({color:0x6c9cff, transparent:true, opacity:0.85})
+  );
+  scene.add(bedOutline);
+}
+setBedGrid(220, 220);
+scene.add(grid);
+
+let mesh = null, wire = false, currentModel = null;
+const mat = new THREE.MeshStandardMaterial({color:0x7c9fef, metalness:0.15, roughness:0.55});
+
+function resize(){
+  const w = canvas.clientWidth, h = canvas.clientHeight;
+  if(canvas.width !== w || canvas.height !== h){
+    renderer.setSize(w, h, false);
+    camera.aspect = w/h; camera.updateProjectionMatrix();
+  }
+}
+(function loop(){ requestAnimationFrame(loop); resize(); controls.update(); renderer.render(scene, camera); })();
+
+function fitCamera(){
+  if(!mesh) return;
+  const box = new THREE.Box3().setFromObject(mesh);
+  const size = box.getSize(new THREE.Vector3()), center = box.getCenter(new THREE.Vector3());
+  const maxDim = Math.max(size.x, size.y, size.z);
+  const dist = maxDim / (2 * Math.tan(Math.PI * camera.fov / 360)) * 1.7;
+  const dir = new THREE.Vector3(1, .72, 1).normalize();
+  camera.position.copy(center).addScaledVector(dir, dist);
+  camera.near = dist/100; camera.far = dist*100; camera.updateProjectionMatrix();
+  controls.target.copy(center);
+}
+
+function showSTL(url, label){
+  currentModel = label;
+  new STLLoader().load(url + '?t=' + Date.now(), geo => {
+    if(mesh){ scene.remove(mesh); mesh.geometry.dispose(); }
+    geo.computeVertexNormals();
+    geo.computeBoundingBox();
+    const bb = geo.boundingBox;
+    // CadQuery is Z-up; three.js is Y-up
+    geo.rotateX(-Math.PI/2);
+    geo.computeBoundingBox();
+    geo.translate(0, -geo.boundingBox.min.y, 0);
+    mesh = new THREE.Mesh(geo, mat);
+    mat.wireframe = wire;
+    scene.add(mesh);
+    fitCamera();
+    const d = [bb.max.x-bb.min.x, bb.max.y-bb.min.y, bb.max.z-bb.min.z].map(v=>v.toFixed(1));
+    document.getElementById('hud').innerHTML = `<b>${label}</b> &nbsp;·&nbsp; ${d[0]} × ${d[1]} × ${d[2]} mm`;
+  });
+}
+
+document.getElementById('tgrid').onclick = e => { grid.visible = !grid.visible; e.target.classList.toggle('on', !grid.visible ? false : true); };
+document.getElementById('twire').onclick = e => { wire = !wire; mat.wireframe = wire; e.target.classList.toggle('on', wire); };
+document.getElementById('tfit').onclick = () => fitCamera();
+
+/* ── API helpers ── */
+const api = (p, opt) => fetch(p, opt).then(r => r.json());
+
+/* status badge */
+async function refreshStatus(){
+  try{
+    const s = await api('/api/status');
+    document.getElementById('dot').className = 'dot' + (s.llm_up || s.imagine_hq_ready ? ' up' : '');
+    let label = s.llm_up ? (s.model||'LLM up').replace(/\.gguf$/,'').slice(0,22) : 'LLM off';
+    if(s.imagine_hq_ready) label += s.flux_ready ? ' · HQ✓' : ' · Hy3D✓';
+    else if(s.comfy_up) label += ' · Comfy';
+    document.getElementById('modelname').textContent = label;
+  }catch(e){ document.getElementById('dot').className = 'dot'; }
+}
+refreshStatus(); setInterval(refreshStatus, 30000);
+
+/* example chips */
+const EXAMPLES_IMAGINE = [
+  'a cute cat figurine',
+  'build me a chicken',
+  'a stylized 3D human figure',
+  'a small dragon toy',
+  'a cartoon robot',
+  'an owl sculpture',
+  'a sitting dog figurine',
+  'a simple rocket ship toy',
+];
+const EXAMPLES_MECH = [
+  'cube 40', 'cylinder 20x60',
+  'a coffee mug with a handle, 85 mm tall',
+  'iphone 17 pro max case',
+  'a phone stand at 60 degrees with a lip',
+  'M8 washer 2mm thick',
+  'soap dish with drain holes',
+  'soda can holder',
+  'credit card sized wallet tray',
+  'project box 100x60x40 with lid',
+  'a hex nut, 24 mm across flats, M10 bore',
+  'desk pen holder 80mm diameter 100mm tall hexagonal',
+];
+function fillChips(el, list){
+  list.forEach(t => {
+    const c = document.createElement('div'); c.className = 'chip'; c.textContent = t;
+    c.onclick = () => {
+      document.getElementById('prompt').value = t;
+      // nudge mode for imagine chips
+      if(list === EXAMPLES_IMAGINE) document.getElementById('mode').value = 'auto';
+    };
+    el.appendChild(c);
+  });
+}
+fillChips(document.getElementById('chips'), EXAMPLES_IMAGINE);
+fillChips(document.getElementById('chips_mech'), EXAMPLES_MECH);
+
+/* ── generation flow ── */
+const live = document.getElementById('live'), ptext = document.getElementById('ptext'), ptime = document.getElementById('ptime');
+const resSec = document.getElementById('result');
+let tick = null;
+
+const PHASE = {
+  llm:'AI designing the model',
+  exec:'building solid (CAD kernel)',
+  sculpt:'sculpting mesh (figurine)',
+  flux_ref:'Flux reference image',
+  hunyuan3d:'Hunyuan3D mesh',
+  'queueing Flux text→image':'Flux generating image',
+  'queueing Hunyuan3D':'Hunyuan3D generating mesh',
+  'staging image':'staging reference image',
+  success:'finishing export',
+};
+
+async function generate(){
+  const prompt = document.getElementById('prompt').value.trim();
+  if(!prompt) return;
+  const go = document.getElementById('go');
+  go.disabled = true; resSec.style.display = 'none'; live.style.display = 'block';
+  ptext.textContent = 'submitting…';
+  const t0 = Date.now();
+  tick = setInterval(() => ptime.textContent = Math.round((Date.now()-t0)/1000) + 's', 500);
+  try{
+    const {job_id} = await api('/api/generate', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({prompt, mode: document.getElementById('mode').value})});
+    while(true){
+      await new Promise(r => setTimeout(r, 900));
+      const j = await api('/api/job/' + job_id);
+      if(j.status === 'done'){ renderResult(j.result); break; }
+      if(j.progress) ptext.textContent = `${PHASE[j.progress.phase]||j.progress.phase} — attempt ${j.progress.attempt}`;
+      else ptext.textContent = j.status === 'queued' ? 'waiting for engine…' : 'working…';
+    }
+  }catch(e){
+    renderResult({ok:false, error:'request failed: ' + e, name:'?', path_used:'?'});
+  }finally{
+    clearInterval(tick); live.style.display = 'none'; go.disabled = false;
+  }
+}
+document.getElementById('go').onclick = generate;
+document.getElementById('prompt').addEventListener('keydown', e => {
+  if(e.key === 'Enter' && (e.metaKey || e.ctrlKey)) generate();
+});
+
+function renderResult(r, opts={}){
+  resSec.style.display = 'block';
+  const card = document.getElementById('rescard');
+  card.className = 'rescard ' + (r.ok ? 'ok' : 'err');
+  document.getElementById('rname').textContent = r.name || '?';
+  const badge = document.getElementById('rbadge');
+  badge.className = 'badge ' + (r.ok ? 'ok' : 'err');
+  badge.textContent = r.ok ? ((r.stats||{}).watertight ? 'watertight ✓' : 'built') : 'failed';
+  document.getElementById('rpath').textContent = {
+    fast:'instant', llm:'mechanical', template:'product-fit', imagine:'imagine',
+    imagine_hq:'HQ 3D', manual:'edited', organic:'imagine',
+  }[r.path_used] || r.path_used;
+
+  const st = document.getElementById('rstats'); st.innerHTML = '';
+  if(r.ok && r.stats){
+    const s = r.stats;
+    const items = [
+      [s.bbox_mm ? s.bbox_mm.join(' × ') + ' mm' : '—', 'dimensions'],
+      [s.volume_cm3 != null ? s.volume_cm3 + ' cm³' : '—', 'volume'],
+      [(s.verts||0).toLocaleString(), 'vertices'],
+      [(s.faces||0).toLocaleString(), 'triangles'],
+    ];
+    items.forEach(([v, l]) => { st.innerHTML += `<div class="st"><b>${v}</b><i>${l}</i></div>`; });
+  }
+  // Show researched product dimensions when present (product-fit quality path)
+  const dim = r.dimensions || null;
+  let dimHtml = '';
+  if(dim && dim.height_mm){
+    const prod = dim.product || 'product';
+    const src = dim.source || '';
+    dimHtml = `<div class="warn" style="border-color:var(--accent);color:var(--text)">
+      📐 <b>${prod}</b> body ${dim.height_mm}×${dim.width_mm}×${dim.depth_mm} mm
+      ${dim.outer_height_mm ? `· outer ~${dim.outer_width_mm}×${dim.outer_height_mm}×${dim.outer_depth_mm} mm` : ''}
+      <span style="color:var(--dim);font-size:10px"> · ${src}</span>
+    </div>`;
+  }
+  document.getElementById('rwarn').innerHTML = dimHtml + (r.warnings||[]).map(w => `<div class="warn">⚠ ${w}</div>`).join('');
+  const eb = document.getElementById('rerr');
+  eb.style.display = r.ok ? 'none' : 'block';
+  eb.textContent = r.ok ? '' : (r.error || 'unknown error');
+
+  const dl = document.getElementById('rdl'); dl.innerHTML = '';
+  if(r.ok && r.files){
+    dl.innerHTML = `<a href="${r.files.stl}" download>⬇ STL for printing</a>` +
+      (r.files.step ? `<a class="step" href="${r.files.step}" download>⬇ STEP for CAD</a>` : '') +
+      `<a class="step" href="/output/${r.name}.quality.txt" download style="grid-column:1/-1;margin-top:4px">⬇ ISO inspection certificate</a>`;
+    showSTL(r.files.stl, r.name);
+    refreshLib(r.name);
+  }
+  const cw = document.getElementById('codewrap');
+  if(r.code){ cw.style.display = 'block'; document.getElementById('codebox').value = r.code; if(!r.ok) cw.open = true; }
+  else cw.style.display = 'none';
+  document.getElementById('rtries').textContent = (r.attempts||[]).length > 1
+    ? 'self-corrections: ' + r.attempts.map(a => `#${a.n} ${a.ok?'✓':'✗'}`).join('  ') + (r.elapsed_s ? `  (${r.elapsed_s}s)` : '')
+    : (r.elapsed_s ? `generated in ${r.elapsed_s}s` : '');
+
+  // ISO inspection certificate (from generate result or fetch)
+  renderIso(r.inspection, r.name);
+
+  // auto bed-fit + demo after every successful model load/generate
+  if(r && r.ok && r.name && !opts.skipAnalyze){
+    currentModel = r.name;
+    mat.color.set(0x7c9fef);
+    runAnalyze(r.name);
+    if(!r.inspection) runInspect(r.name);
+  }
+}
+
+function renderIso(insp, name){
+  const box = document.getElementById('iso_box');
+  if(!insp){
+    if(name && name !== '?'){ runInspect(name); }
+    else box.style.display = 'none';
+    return;
+  }
+  box.style.display = 'block';
+  const grade = insp.grade || '?';
+  const disp = insp.disposition || '?';
+  const col = disp === 'ACCEPT' ? 'var(--ok)' : disp === 'REJECT' ? 'var(--err)' : 'var(--warn)';
+  const dim = insp.dimensional || {};
+  const chars = (dim.characteristics || []).slice(0, 8).map(c => {
+    const mark = c.result === 'PASS' ? '✓' : c.result === 'FAIL' ? '✗' : '·';
+    const act = c.actual_mm == null ? '—' : c.actual_mm;
+    return `<div style="font-family:var(--mono);font-size:10px;color:#a8b0c8">${mark} ${c.characteristic}: nom ${c.nominal_mm} act ${act} ±${c.tolerance_pm_mm}</div>`;
+  }).join('');
+  const integ = ((insp.integrity||{}).checks||[]).map(c =>
+    `<span class="pill ${c.ok?'yes':'no'}" style="margin:2px">${c.id}</span>`
+  ).join('');
+  box.innerHTML = `<div class="pareport" style="max-height:280px">
+    <h3>ISO inspection · ${insp.tolerance_class_name || 'ISO 2768'}</h3>
+    <div class="sum" style="color:${col}">${disp} · Grade ${grade}</div>
+    <div style="font-size:11px;color:var(--dim);margin-bottom:6px">${insp.conformance_summary || ''}</div>
+    <div class="fit-row">${integ}</div>
+    <div style="margin-top:6px">${chars}</div>
+    <div style="font-size:10px;color:var(--dim);margin-top:8px">Trace: ${(insp.part||{}).stl_sha256_16 || '—'} ·
+      <a href="/output/${name}.quality.txt" style="color:var(--accent)" download>full certificate</a></div>
+    <div style="font-size:9px;color:#666;margin-top:6px">Engineering prototype control — not AS9100 / flight cert.</div>
+  </div>`;
+}
+
+async function runInspect(name){
+  if(!name || name === '?') return;
+  try{
+    const r = await api('/api/inspect', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({name, tolerance_class:'iso2768-m'}),
+    });
+    if(r.inspection) renderIso(r.inspection, name);
+  }catch(e){ /* non-fatal */ }
+}
+
+/* run edited code */
+document.getElementById('runcode').onclick = async e => {
+  const code = document.getElementById('codebox').value.trim();
+  if(!code) return;
+  e.target.disabled = true; e.target.textContent = '⏳ running…';
+  try{
+    const r = await api('/api/run-code', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({code, name: document.getElementById('rname').textContent + '_edit'})});
+    renderResult(r);
+    document.getElementById('codewrap').open = true;
+  }finally{ e.target.disabled = false; e.target.textContent = '▶ Run edited code'; }
+};
+
+/* ── library ── */
+async function refreshLib(activeName){
+  const items = await api('/api/list');
+  const lib = document.getElementById('lib');
+  if(!items.length){ lib.innerHTML = '<div class="empty">nothing yet — generate something!</div>'; return; }
+  lib.innerHTML = '';
+  items.forEach(it => {
+    const el = document.createElement('div');
+    el.className = 'lib-item' + (it.name === activeName ? ' active' : '');
+    const dims = (it.stats && it.stats.bbox_mm) ? it.stats.bbox_mm.join('×') + 'mm · ' : '';
+    const fitTag = (it.last_analysis && it.last_analysis.fits_bed)
+      ? ` · fit ${it.last_analysis.fits_bed}` : '';
+    el.innerHTML = `<div class="lib-info"><div class="lib-name">${it.name}</div>
+      <div class="lib-meta">${dims}${it.size_kb} KB${it.prompt ? ' · ' + it.prompt : ''}${fitTag}</div></div>
+      <button class="lib-del" title="delete">✕</button>`;
+    el.querySelector('.lib-info').onclick = async () => {
+      document.querySelectorAll('.lib-item').forEach(x => x.classList.remove('active'));
+      el.classList.add('active');
+      currentModel = it.name;
+      showSTL(it.stl, it.name);
+      mat.color.set(0x7c9fef);
+      if(it.has_code){
+        const meta = await api('/api/model/' + it.name);
+        renderResult({ok:true, name:it.name, code:meta.code, stats:meta.stats, warnings:meta.warnings,
+          path_used:meta.path_used, dimensions:meta.dimensions,
+          files:{stl:it.stl, step:it.step}});
+      } else {
+        runAnalyze(it.name);
+      }
+    };
+    el.querySelector('.lib-del').onclick = async ev => {
+      ev.stopPropagation();
+      if(!confirm(`Delete ${it.name}?`)) return;
+      await fetch('/api/model/' + it.name, {method:'DELETE'});
+      refreshLib();
+    };
+    lib.appendChild(el);
+  });
+}
+refreshLib();
+
+/* upload + drag-drop */
+document.getElementById('upl').onclick = () => document.getElementById('uplfile').click();
+document.getElementById('uplfile').onchange = async e => {
+  if(e.target.files[0]) await uploadFile(e.target.files[0]);
+  e.target.value = '';
+};
+async function uploadFile(f){
+  const fd = new FormData(); fd.append('file', f);
+  const r = await api('/api/upload', {method:'POST', body:fd});
+  if(r.stl){
+    currentModel = r.name;
+    showSTL(r.stl, r.name);
+    refreshLib(r.name);
+    runAnalyze(r.name);
+  }
+}
+const vp = document.getElementById('vp'), dz = document.getElementById('dz');
+vp.addEventListener('dragover', e => { e.preventDefault(); dz.style.display = 'flex'; });
+vp.addEventListener('dragleave', e => { if(e.target === vp) dz.style.display = 'none'; });
+vp.addEventListener('drop', async e => {
+  e.preventDefault(); dz.style.display = 'none';
+  const f = e.dataTransfer.files[0];
+  if(f && f.name.toLowerCase().endsWith('.stl')) await uploadFile(f);
+});
+
+/* ── Print Assistant ── */
+const paPrinter = document.getElementById('pa_printer');
+const paBedX = document.getElementById('pa_bed_x');
+const paBedY = document.getElementById('pa_bed_y');
+const paBedZ = document.getElementById('pa_bed_z');
+const bedWarn = document.getElementById('bedwarn');
+let printerCatalog = [];
+
+function bedKnown(){
+  const x = parseFloat(paBedX.value), y = parseFloat(paBedY.value), z = parseFloat(paBedZ.value);
+  return Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(z) && x > 0 && y > 0 && z > 0;
+}
+function refreshBedWarn(){
+  bedWarn.style.display = bedKnown() ? 'none' : 'block';
+  if(bedKnown()) setBedGrid(parseFloat(paBedX.value), parseFloat(paBedY.value));
+}
+[paBedX, paBedY, paBedZ].forEach(el => el.addEventListener('input', refreshBedWarn));
+
+async function initPrinters(){
+  try{
+    const data = await api('/api/printers');
+    printerCatalog = data.printers || [];
+    paPrinter.innerHTML = '';
+    printerCatalog.forEach(p => {
+      const o = document.createElement('option');
+      o.value = p.id;
+      o.textContent = p.bed_x
+        ? `${p.label} (${p.bed_x}×${p.bed_y}×${p.bed_z})`
+        : p.label + ' — set bed manually';
+      paPrinter.appendChild(o);
+    });
+    const fil = document.getElementById('pa_filament');
+    fil.innerHTML = '';
+    (data.filaments || ['PLA']).forEach(f => {
+      const o = document.createElement('option'); o.value = f; o.textContent = f; fil.appendChild(o);
+    });
+    // default Ender 3
+    paPrinter.value = printerCatalog.some(p => p.id === 'ender3') ? 'ender3' : (printerCatalog[0]?.id || 'custom');
+    applyPrinterProfile();
+  }catch(e){
+    paPrinter.innerHTML = '<option value="custom">Custom</option>';
+    refreshBedWarn();
+  }
+}
+function applyPrinterProfile(){
+  const p = printerCatalog.find(x => x.id === paPrinter.value);
+  if(!p){ refreshBedWarn(); return; }
+  if(p.bed_x != null){ paBedX.value = p.bed_x; paBedY.value = p.bed_y; paBedZ.value = p.bed_z; }
+  else { paBedX.value = ''; paBedY.value = ''; paBedZ.value = ''; }
+  if(p.nozzle_mm) document.getElementById('pa_nozzle').value = p.nozzle_mm;
+  refreshBedWarn();
+}
+paPrinter.addEventListener('change', applyPrinterProfile);
+initPrinters();
+
+function printerPayload(){
+  const bed_x = paBedX.value === '' ? null : parseFloat(paBedX.value);
+  const bed_y = paBedY.value === '' ? null : parseFloat(paBedY.value);
+  const bed_z = paBedZ.value === '' ? null : parseFloat(paBedZ.value);
+  return {
+    printer_model: paPrinter.value,
+    bed_x, bed_y, bed_z,
+    nozzle_mm: parseFloat(document.getElementById('pa_nozzle').value) || 0.4,
+    layer_height_mm: parseFloat(document.getElementById('pa_layer').value) || 0.2,
+    filament: document.getElementById('pa_filament').value || 'PLA',
+    slicer: document.getElementById('pa_slicer').value || 'standard',
+    intended_use: document.getElementById('pa_use').value || 'prototype',
+    demo_speed: parseInt(document.getElementById('pa_demo').value, 10) || 10,
+  };
+}
+
+function fitPill(label){
+  const cls = ({Yes:'yes', Maybe:'maybe', No:'no', Unknown:'unknown'})[label] || 'unknown';
+  return `<span class="pill ${cls}">Fits: ${label}</span>`;
+}
+function riskPill(level){
+  const cls = 'risk-' + String(level||'high').toLowerCase();
+  return `<span class="pill ${cls}">Risk: ${level}</span>`;
+}
+
+function renderAnalysis(r){
+  const box = document.getElementById('pareport');
+  box.style.display = 'block';
+  const st = r.settings || {};
+  const dem = r.demo || {stages:[]};
+  const stagesHtml = (dem.stages || []).map(s => {
+    const risks = (s.risks || []).filter(x => x && x !== '—');
+    return `<div class="stage">
+      <div><span class="t">${s.time}</span> — <span class="sn">${s.stage}</span></div>
+      <div class="kv">
+        <span>Layers</span><span>${s.layer_range || '—'}</span>
+        <span>Nozzle</span><span>${s.nozzle || '—'}</span>
+        <span>Supports</span><span>${s.supports || '—'}</span>
+        <span>Watch</span><span>${s.watch_for || '—'}</span>
+        <span>In volume</span><span style="color:${s.within_volume ? 'var(--ok)' : 'var(--err)'}">${s.within_volume ? 'yes' : 'NO'}</span>
+      </div>
+      ${risks.length ? `<div style="color:var(--warn);margin-top:4px">Risk: ${risks.join(' · ')}</div>` : ''}
+      ${s.detail ? `<div style="color:var(--dim);margin-top:2px">${s.detail}</div>` : ''}
+    </div>`;
+  }).join('');
+
+  const fails = (r.failures || []).map((f,i) => `<li><b>${i+1}. ${f.title}</b> — ${f.detail}</li>`).join('');
+  const problems = (r.problems || []).map(p => `<li>${p}</li>`).join('');
+  const fixes = (r.fixes || []).map(p => `<li>${p}</li>`).join('');
+  const m = r.model || {};
+  const p = r.printer || {};
+  const bed = p.bed_x != null ? `${p.bed_x}×${p.bed_y}×${p.bed_z} mm` : 'UNKNOWN';
+
+  box.innerHTML = `<div class="pareport">
+    <h3>Summary</h3>
+    <div class="sum">${r.summary || ''}</div>
+    <div class="fit-row">
+      ${fitPill(r.fits_bed)}
+      <span class="pill ${r.printable_as_is==='Yes'?'yes':r.printable_as_is==='Maybe'?'maybe':'no'}">Printable: ${r.printable_as_is}</span>
+      ${riskPill(r.risk_level)}
+      <span class="pill path" style="background:#151528;color:var(--accent)">Demo ${dem.demo_speed || ''}</span>
+    </div>
+
+    <h3>Printer / build volume</h3>
+    <div class="kv">
+      <span>Printer</span><span>${p.label || p.printer_model || '—'}</span>
+      <span>Build volume</span><span>${bed}</span>
+      <span>Nozzle / layer</span><span>${p.nozzle_mm} mm · ${p.layer_height_mm} mm</span>
+      <span>Filament / use</span><span>${p.filament} · ${p.intended_use}</span>
+    </div>
+
+    <h3>Model dimensions</h3>
+    <div class="kv">
+      <span>Size</span><span>${m.x_mm} × ${m.y_mm} × ${m.z_mm} mm</span>
+      <span>Volume</span><span>${m.volume_cm3 != null ? m.volume_cm3 + ' cm³' : '—'}</span>
+      <span>Triangles</span><span>${(m.face_count||0).toLocaleString()}</span>
+    </div>
+    <div class="kv" style="margin-top:6px">
+      <span>Fits bed</span><span><b>${r.fits_bed}</b></span>
+      <span>Required change</span><span>${r.required_change || '—'}</span>
+      <span>Printable as-is</span><span><b>${r.printable_as_is}</b></span>
+      <span>Risk</span><span><b>${r.risk_level}</b></span>
+    </div>
+
+    <h3>Demo print walkthrough · ${dem.demo_speed || '10x'}${dem.aborted ? ' · ABORTED' : ''}</h3>
+    ${stagesHtml}
+
+    <h3>Visual print map</h3>
+    <pre>${r.visual_map || ''}</pre>
+
+    <h3>Slicer-style preview</h3>
+    <pre>${r.slicer_preview || ''}</pre>
+
+    <h3>Main problems</h3>
+    <ul>${problems}</ul>
+    <h3>Fixes</h3>
+    <ul>${fixes}</ul>
+
+    <h3>Recommended slicer settings</h3>
+    <div class="kv">
+      <span>Layer height</span><span>${st.layer_height_mm} mm</span>
+      <span>Walls</span><span>${st.wall_count}</span>
+      <span>Infill</span><span>${st.infill_pct}% (${st.infill_pattern})</span>
+      <span>Support</span><span>${st.support_type} @ ${st.support_angle_deg}°</span>
+      <span>Adhesion</span><span>${st.adhesion}</span>
+      <span>Temps</span><span>${st.nozzle_temp_c}°C / bed ${st.bed_temp_c}°C</span>
+      <span>Speed / fan</span><span>${st.speed_mm_s} mm/s · ${st.cooling_pct}%</span>
+      <span>Scale</span><span>${st.scaling_pct}%</span>
+      <span>Orientation</span><span>${st.orientation}</span>
+    </div>
+
+    <h3>Top failure predictions</h3>
+    <ul>${fails}</ul>
+
+    <h3>Final print recommendation</h3>
+    <div class="sum" style="color:${r.printable_as_is==='No'?'var(--err)':r.printable_as_is==='Maybe'?'var(--warn)':'var(--ok)'}">${r.final_recommendation || ''}</div>
+  </div>`;
+  box.scrollIntoView({behavior:'smooth', block:'nearest'});
+}
+
+async function runAnalyze(name){
+  const model = name || currentModel || document.getElementById('rname').textContent;
+  if(!model || model === '?'){ alert('Load or generate an STL first'); return; }
+  const btn = document.getElementById('analyze');
+  btn.disabled = true; btn.textContent = '⏳ analyzing…';
+  try{
+    const body = {name: model, ...printerPayload()};
+    const r = await api('/api/analyze', {
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify(body),
+    });
+    if(r.detail){ alert(typeof r.detail === 'string' ? r.detail : JSON.stringify(r.detail)); return; }
+    renderAnalysis(r);
+    // tint mesh by fit
+    if(r.fits_bed === 'Yes') mat.color.set(0x4ade80);
+    else if(r.fits_bed === 'Maybe') mat.color.set(0xfbbf24);
+    else mat.color.set(0xff6b6b);
+  }catch(e){
+    alert('Analyze failed: ' + e);
+  }finally{
+    btn.disabled = false; btn.textContent = '🖨 Analyze print · bed fit · demo';
+  }
+}
+document.getElementById('analyze').onclick = () => runAnalyze();
+</script>
+</body>
+</html>
