@@ -9,3 +9,4 @@ requests
 # cadquery 2.8.0 installed with --no-deps + manual deps; nlopt satisfied by nlopt_shim/
 networkx
 scikit-image
+pytest>=8.0
