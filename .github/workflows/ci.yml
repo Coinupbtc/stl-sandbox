@@ -1,0 +1,25 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.11"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Install (including aarch64-aware cadquery path)
+        run: ./install.sh
+      - name: Run unit test suite
+        run: |
+          OPENBLAS_NUM_THREADS=4 OMP_NUM_THREADS=4 ./.venv/bin/python -m pytest \
+            test_dim_research.py test_feature_layout.py test_size_intent.py \
+            test_templates.py test_iso_quality.py test_print_assistant.py -q

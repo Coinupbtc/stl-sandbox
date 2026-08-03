@@ -1,5 +1,7 @@
 # STL Sandbox
 
+![CI](https://github.com/Coinupbtc/stl-sandbox/actions/workflows/ci.yml/badge.svg)
+
 Type a plain-English prompt → get a **3D-printable STL** (and a **STEP** for CAD) — fully
 local, no cloud. Browser sandbox at **http://localhost:8050**.
 
