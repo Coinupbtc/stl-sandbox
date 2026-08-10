@@ -11,3 +11,4 @@ hq_refs/
 !.env.example
 venv/
 node_modules/
+dogfood-output/
