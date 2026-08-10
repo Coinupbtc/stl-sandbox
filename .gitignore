@@ -8,3 +8,6 @@ hq_refs/
 .env
 .env.*
 .claude/
+!.env.example
+venv/
+node_modules/
