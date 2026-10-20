@@ -92,3 +92,49 @@ if __name__ == "__main__":
             print(f"  FAIL  {t.__name__}: {e}")
     print(f"\n{len(tests) - failed}/{len(tests)} passed")
     sys.exit(1 if failed else 0)
+
+
+def _cert_with_integrity(monkeypatch, checks, **extra):
+    import trimesh
+    stl = os.path.join(tempfile.gettempdir(), "iso_gate_box.stl")
+    trimesh.creation.box(extents=[20, 20, 10]).export(stl)
+    step = stl.replace(".stl", ".step")
+    open(step, "w").write("ISO-10303-21;")
+    crit = {"watertight", "winding_consistent", "no_degenerate_faces", "min_wall_thickness"}
+    integ = {
+        "checks": checks,
+        "integrity_ok": all(c["ok"] for c in checks if c["id"] in crit),
+        "critical_failures": [c["id"] for c in checks if c["id"] in crit and not c["ok"]],
+        "advisory_failures": [c["id"] for c in checks if c["id"] not in crit and not c["ok"]],
+        "not_evaluated": [c["id"] for c in checks if c.get("evaluated") is False],
+        "extents_mm": [20.0, 20.0, 10.0], **extra,
+    }
+    monkeypatch.setattr(iso_quality, "mesh_integrity", lambda *a, **k: integ)
+    return iso_quality.build_certificate(name="gate_box", prompt="box", stl_path=stl, step_path=step,
+        size_contract={"height_mm": 10, "source": "test"})
+
+
+def test_failed_noncritical_check_is_not_grade_a(monkeypatch):
+    cert = _cert_with_integrity(monkeypatch, [
+        {"id": "watertight", "ok": True, "detail": ""},
+        {"id": "triangle_quality", "ok": False, "detail": "504 high-aspect triangles in sample of 1032"},
+    ])
+    assert cert["grade"] == "B" and cert["disposition"] == "ACCEPT_WITH_DEVIATION", cert["grade"]
+    assert "triangle_quality" in cert["conformance_summary"]
+    assert "integrity gates passed" not in cert["conformance_summary"]
+
+
+def test_all_checks_ok_still_grade_a(monkeypatch):
+    cert = _cert_with_integrity(monkeypatch, [
+        {"id": "watertight", "ok": True, "detail": ""},
+        {"id": "triangle_quality", "ok": True, "detail": ""},
+    ])
+    assert cert["grade"] == "A"
+
+
+def test_unevaluated_check_is_named_in_summary(monkeypatch):
+    cert = _cert_with_integrity(monkeypatch, [
+        {"id": "watertight", "ok": True, "detail": ""},
+        {"id": "min_wall_thickness", "ok": True, "evaluated": False, "detail": "not estimated (ray engine unavailable)"},
+    ])
+    assert "Not evaluated: min_wall_thickness" in cert["conformance_summary"]

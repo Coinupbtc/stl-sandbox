@@ -269,6 +269,7 @@ def mesh_integrity(stl_path: str, nozzle_mm: float = 0.4) -> dict[str, Any]:
     checks.append({
         "id": "min_wall_thickness",
         "ok": wall_ok if min_wall is not None else True,
+        "evaluated": min_wall is not None,
         "detail": (
             f"min≈{min_wall:.2f} mm (req ≥{min_req:.2f} mm, nozzle {nozzle_mm})"
             if min_wall is not None else f"not estimated ({wall_method})"
@@ -313,6 +314,7 @@ def mesh_integrity(stl_path: str, nozzle_mm: float = 0.4) -> dict[str, Any]:
 
     critical = {"watertight", "winding_consistent", "no_degenerate_faces", "min_wall_thickness"}
     crit_fail = [c for c in checks if c["id"] in critical and not c["ok"]]
+    advisory_fail = [c for c in checks if c["id"] not in critical and not c["ok"]]
     return {
         "checks": checks,
         "integrity_ok": len(crit_fail) == 0,
@@ -322,6 +324,8 @@ def mesh_integrity(stl_path: str, nozzle_mm: float = 0.4) -> dict[str, Any]:
         "verts": int(len(mesh.vertices)),
         "min_wall_mm": None if min_wall is None else round(min_wall, 3),
         "critical_failures": [c["id"] for c in crit_fail],
+        "advisory_failures": [c["id"] for c in advisory_fail],
+        "not_evaluated": [c["id"] for c in checks if c.get("evaluated") is False],
     }
 
 
@@ -446,7 +450,9 @@ def build_certificate(
     process_ok = all(p["ok"] for p in process if p["id"] != "generation_path")
 
     # Overall disposition
-    if integ_ok and dim_ok and process_ok and layout_ok:
+    # a failed non-critical check (e.g. triangle_quality) keeps the part usable but not Grade A
+    integ_clean = integ_ok and not integ.get("advisory_failures")
+    if integ_clean and dim_ok and process_ok and layout_ok:
         disposition = "ACCEPT"
         grade = "A"
     elif integ_ok and (dim_ok or dim.get("dimensional_advisory")):
@@ -498,16 +504,27 @@ def build_certificate(
 
 
 def _summary(disposition: str, grade: str, dim: dict, integ: dict) -> str:
+    advisory = integ.get("advisory_failures") or []
+    unchecked = integ.get("not_evaluated") or []
     if disposition == "ACCEPT":
-        return (
+        msg = (
             f"Grade {grade}: dimensional characteristics within "
             f"{dim.get('tolerance_class_name')} and mesh integrity gates passed."
         )
+        if unchecked:
+            msg += f" Not evaluated: {', '.join(unchecked)}."
+        return msg
     if disposition == "ACCEPT_WITH_DEVIATION":
-        return (
-            f"Grade {grade}: integrity OK; dimensional advisory or minor process notes. "
-            "Review deviations before critical fit."
-        )
+        if advisory:
+            msg = (
+                f"Grade {grade}: no critical integrity failures, but advisory checks failed: "
+                f"{', '.join(advisory)}."
+            )
+        else:
+            msg = f"Grade {grade}: integrity OK; dimensional advisory or minor process notes."
+        if unchecked:
+            msg += f" Not evaluated: {', '.join(unchecked)}."
+        return msg + " Review deviations before critical fit."
     fails = integ.get("critical_failures") or []
     return (
         f"Grade {grade}: REJECT — critical failures: {', '.join(fails) or 'dimensional/process'}. "
